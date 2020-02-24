@@ -12,22 +12,26 @@ fn main() {
     for i in 0..5 {
         let rx = arx.clone();
         threads.push(thread::spawn(move || loop {
-            let rx = rx.lock().unwrap();
-            if let Ok(it) = rx.recv() {
-                drop(rx);
+            if let Ok(it) = {
+                let rx = rx.lock().unwrap();
+                rx.recv()
+                // rx drop (unlock) here
+            } {
                 sleep(Duration::from_millis(100));
                 println!("worker {} received {}", i, it);
             } else {
+                // rx error when tx drop
                 break;
             }
         }));
     }
 
-    for i in 0..100 {
-        tx.send(format!("msg {}", i)).unwrap();
-    }
-
-    drop(tx);
+    (move || {
+        // tx moved inside here and will drop(tx) after this function done
+        for i in 0..100 {
+            tx.send(format!("msg {}", i)).unwrap();
+        }
+    })();
 
     for t in threads {
         t.join().unwrap();
